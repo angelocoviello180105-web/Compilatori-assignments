@@ -16,9 +16,9 @@ namespace {
 
   /** La funzione ritorna 2 se il secondo operando(getOperand(1)) è un intero, 1 se è il primo è intero, -1 se non è binaria, 0 altrimenti 
    in ogni caso tenta di registrare il valore intero in \param opInteger*/
-  
+   
   int getIntegerOperand(Instruction &inst, ConstantInt *&opInteger) {
-    if (!inst.isBinaryOp()) { //controlla se l'istruzione inst sia a due binaria 
+    if (!inst.isBinaryOp()) { //controlla se l'istruzione inst sia binaria 
       
       return -1;
     
@@ -49,7 +49,7 @@ namespace {
   }
 
   /*
-  Controlla se c'è una potenza di due nell'intorno ]integerOperand-maxDist ; integerOperand+maxDist[
+  Controlla se esiste una potenza di due nell'intorno ]integerOperand-maxDist ; integerOperand+maxDist[
   */
   int strReductionProbe(ConstantInt* integerOperand, int maxDist) {
     
@@ -80,7 +80,7 @@ struct StrRedOpt: PassInfoMixin<StrRedOpt> {
     
     // definizioni variabili ausiliarie
     auto Integer32bitCtx = IntegerType::getInt32Ty(F.getContext());
-    const int MAX_DISTANCE = 3; //Intorno massimo entro il quale cercare la potenza di due 
+    const int MAX_DISTANCE = 3; //Intorno massimo entro il quale cercare la potenza di due (3 = distanza massima di 2)
     std::vector<Instruction*> deadCode;
     // ------------
     
@@ -109,7 +109,11 @@ struct StrRedOpt: PassInfoMixin<StrRedOpt> {
             || inst.getOpcode() == Instruction::UDiv) && C->getValue().isPowerOf2()) {
               // outs() << "riconosciuta una divisione\n";
               
-              Instruction *StrengthRed = strRedDiv(C, inst.getOperand(0), Integer32bitCtx);
+              Instruction *StrengthRed = BinaryOperator::Create(Instruction::AShr,
+                                          inst.getOperand(0), 
+                                          ConstantInt::get(
+                                            Integer32bitCtx,
+                                            C->getValue().logBase2()));
               StrengthRed->insertAfter(&inst);
               inst.replaceAllUsesWith(StrengthRed);
               //se l'istruzione non viene piu' usata viene aggiunta al vettore di istruzioni da eliminare
@@ -117,8 +121,7 @@ struct StrRedOpt: PassInfoMixin<StrRedOpt> {
               
 
           } else if ( // 2. MOLTIPLICAZIONE CON IL SECONOD OPERANDO IN UN INTORNO DA 2^n
-            (inst.getOpcode() == Instruction::Mul
-            || inst.getOpcode() == Instruction::FMul)
+            (inst.getOpcode() == Instruction::Mul)
           ) {
             
             // outs() << "riconosciuta moltiplicazione\n";
@@ -168,8 +171,7 @@ struct StrRedOpt: PassInfoMixin<StrRedOpt> {
 
         } else if (hasIntegerOp == 1) {
           if ( // 2. MOLTIPLICAZIONE CON IL PRIMO OPERANDO IN UN INTORNO DA 2^n
-            (inst.getOpcode() == Instruction::Mul
-            || inst.getOpcode() == Instruction::FMul)
+            (inst.getOpcode() == Instruction::Mul)
           ) {
             
             // outs() << "riconosciuta moltiplicazione\n";
@@ -238,7 +240,7 @@ llvm::PassPluginLibraryInfo getStrRedOptPluginInfo() {
           [](PassBuilder &PB) {
             PB.registerPipelineParsingCallback( [](StringRef Name, FunctionPassManager &FPM,ArrayRef<PassBuilder::PipelineElement>)  //Using these callbacks, callers can parse both a single pass name, as well as entire sub-pipelines, and populate the PassManager instance accordingly. 
               {
-                if (Name == "str-red-opts") {
+                if (Name == "str-red-opt") {
                   FPM.addPass(StrRedOpt());
                   return true;
                 }
