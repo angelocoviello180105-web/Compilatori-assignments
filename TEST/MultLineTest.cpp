@@ -34,7 +34,7 @@ float redundantDivOrMult(int varExt) {
     float q = z/30;
 
     float controZ = z/45; // deve diventare varExt (%0)
-    float controZ2 = z2*35; // deve diventare varExt (%0)
+    float controZ2 = z2/35; // deve diventare varExt (%0)
 
 
     // controllo interruzioni
