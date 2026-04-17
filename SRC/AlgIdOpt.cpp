@@ -22,6 +22,10 @@ struct AlgIdOpt: PassInfoMixin<AlgIdOpt> {
   
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &) {
 
+    // definizioni variabili ausiliarie
+    std::vector<Instruction*> deadCode;
+    // ------------
+
     for (auto Iter = F.begin(); Iter != F.end(); ++Iter) {
       BasicBlock &B = *Iter;
 
@@ -29,26 +33,37 @@ struct AlgIdOpt: PassInfoMixin<AlgIdOpt> {
         
         if(inst.isBinaryOp()) {
           
+          // CASISTICA (X+0) | (X*1) 
           if(ConstantInt *C = dyn_cast<ConstantInt>(inst.getOperand(1))) {
            
-            if( (inst.getOpcode() == Instruction::Add && C->isZero()) || (inst.getOpcode() == Instruction::Mul && C->isOne()) ) {
+            if( !(C->isZero() || C->isOne()) ) {
+              // CASISTICA (0+X) | (1*X) 
+              if (ConstantInt *C = dyn_cast<ConstantInt>(inst.getOperand(0))) {
+                if( (inst.getOpcode() == Instruction::Add && C->isZero()) || (inst.getOpcode() == Instruction::Mul && C->isOne()) ) {
+                  // outs() << "Istruzione : " << inst << "\n";
+                  // outs() <<  "identità di moltiplicazione o addizione\n";
+                  inst.replaceAllUsesWith(inst.getOperand(1));
+                  //l'istruzione vecchia viene aggiunta al vettore di istruzioni da eliminare
+                  deadCode.push_back(&inst);
+                }
+              }
+            
+            } else if( (inst.getOpcode() == Instruction::Add && C->isZero()) || (inst.getOpcode() == Instruction::Mul && C->isOne()) ) {
               // outs() << "Istruzione : " << inst << "\n";
               // outs() <<  "identità di moltiplicazione o addizione\n";
               inst.replaceAllUsesWith(inst.getOperand(0));
-              
-            }
-          } else if (ConstantInt *C = dyn_cast<ConstantInt>(inst.getOperand(0))) {
-            if( (inst.getOpcode() == Instruction::Add && C->isZero()) || (inst.getOpcode() == Instruction::Mul && C->isOne()) ) {
-              // outs() << "Istruzione : " << inst << "\n";
-              // outs() <<  "identità di moltiplicazione o addizione\n";
-              inst.replaceAllUsesWith(inst.getOperand(1));
-              
+              //l'istruzione vecchia viene aggiunta al vettore di istruzioni da eliminare
+              deadCode.push_back(&inst);
             }
           }
         }
       }
     }
 
+    //rimozione delle istruzioni non utilizzate
+    for (Instruction *inst : deadCode) {
+      inst->eraseFromParent();
+    }
 
     return PreservedAnalyses::all();
   }
