@@ -38,16 +38,6 @@ namespace {
   
   }
 
-  Instruction* strRedDiv(ConstantInt *C, Value *registerOperand, IntegerType *integerCtx) {
-    
-    return BinaryOperator::Create(Instruction::AShr,
-      registerOperand, 
-      ConstantInt::get(
-        integerCtx,
-        C->getValue().logBase2()));
-        
-  }
-
   /*
   Controlla se esiste una potenza di due nell'intorno ]integerOperand-maxDist ; integerOperand+maxDist[
   */
