@@ -22,6 +22,10 @@ struct AlgIdOpt: PassInfoMixin<AlgIdOpt> {
   
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &) {
 
+    // definizioni variabili ausiliarie
+    std::vector<Instruction*> deadCode;
+    // ------------
+
     for (auto Iter = F.begin(); Iter != F.end(); ++Iter) {
       BasicBlock &B = *Iter;
 
@@ -35,20 +39,26 @@ struct AlgIdOpt: PassInfoMixin<AlgIdOpt> {
               // outs() << "Istruzione : " << inst << "\n";
               // outs() <<  "identità di moltiplicazione o addizione\n";
               inst.replaceAllUsesWith(inst.getOperand(0));
-              
+              //l'istruzione vecchia viene aggiunta al vettore di istruzioni da eliminare
+              deadCode.push_back(&inst);
             }
           } else if (ConstantInt *C = dyn_cast<ConstantInt>(inst.getOperand(0))) {
             if( (inst.getOpcode() == Instruction::Add && C->isZero()) || (inst.getOpcode() == Instruction::Mul && C->isOne()) ) {
               // outs() << "Istruzione : " << inst << "\n";
               // outs() <<  "identità di moltiplicazione o addizione\n";
               inst.replaceAllUsesWith(inst.getOperand(1));
-              
+              //l'istruzione vecchia viene aggiunta al vettore di istruzioni da eliminare
+              deadCode.push_back(&inst);
             }
           }
         }
       }
     }
 
+    //rimozione delle istruzioni non utilizzate
+    for (Instruction *inst : deadCode) {
+      inst->eraseFromParent();
+    }
 
     return PreservedAnalyses::all();
   }

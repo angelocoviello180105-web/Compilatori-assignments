@@ -14,13 +14,13 @@ using namespace llvm;
 // everything in an anonymous namespace.
 namespace {
 
-  /** La funzione ritorna 2 se il secondo operando(getOperand(1)) è un intero, 1 se è il primo è intero, 0 altrimenti 
+  /** La funzione ritorna 2 se il secondo operando(getOperand(1)) è un intero, 1 se è il primo è intero, -1 se non è binaria, 0 altrimenti 
    in ogni caso tenta di registrare il valore intero in \param opInteger*/
-   
+  
   int getIntegerOperand(Instruction &inst, ConstantInt *&opInteger) {
-    if (!inst.isBinaryOp()) { //controlla se l'istruzione inst sia a due Operandi 
+    if (!inst.isBinaryOp()) { //controlla se l'istruzione inst sia a due binaria 
       
-      return 0;
+      return -1;
     
     } else if (ConstantInt *C = dyn_cast<ConstantInt>(inst.getOperand(1))) { // secondo Op intero
       
@@ -80,7 +80,8 @@ struct StrRedOpt: PassInfoMixin<StrRedOpt> {
     
     // definizioni variabili ausiliarie
     auto Integer32bitCtx = IntegerType::getInt32Ty(F.getContext());
-    const int MAX_DISTANCE = 5;
+    const int MAX_DISTANCE = 3; //Intorno massimo entro il quale cercare la potenza di due 
+    std::vector<Instruction*> deadCode;
     // ------------
     
     for (auto Iter = F.begin(); Iter != F.end(); ++Iter) {
@@ -89,7 +90,6 @@ struct StrRedOpt: PassInfoMixin<StrRedOpt> {
       
       // definizioni variabili ausiliarie
       ConstantInt *C;
-      
       // ------------
       
       for (Instruction &inst : B) {
@@ -112,7 +112,8 @@ struct StrRedOpt: PassInfoMixin<StrRedOpt> {
               Instruction *StrengthRed = strRedDiv(C, inst.getOperand(0), Integer32bitCtx);
               StrengthRed->insertAfter(&inst);
               inst.replaceAllUsesWith(StrengthRed);
-
+              //se l'istruzione non viene piu' usata viene aggiunta al vettore di istruzioni da eliminare
+              deadCode.push_back(&inst);
               
 
           } else if ( // 2. MOLTIPLICAZIONE CON IL SECONOD OPERANDO IN UN INTORNO DA 2^n
@@ -127,6 +128,8 @@ struct StrRedOpt: PassInfoMixin<StrRedOpt> {
               Instruction *strMul = BinaryOperator::Create(Instruction::Shl, inst.getOperand(0), ConstantInt::get(Integer32bitCtx, C->getValue().logBase2()));
               strMul->insertAfter(&inst);
               inst.replaceAllUsesWith(strMul);
+              //se l'istruzione non viene piu' usata viene aggiunta al vettore di istruzioni da eliminare
+              deadCode.push_back(&inst);
             } else if(abs(distFromLog) < MAX_DISTANCE) {
 
               std::vector<Instruction*> daInserire; //array che ospiterà la strenght reduction e le add/sub successive
@@ -154,6 +157,10 @@ struct StrRedOpt: PassInfoMixin<StrRedOpt> {
                 daInserire[i]->insertAfter(daInserire[i-1]);
               }
               inst.replaceAllUsesWith(daInserire.back());
+              //se l'istruzione non viene piu' usata viene aggiunta al vettore di istruzioni da eliminare
+              deadCode.push_back(&inst);
+              
+              
             }
             
                  
@@ -195,12 +202,24 @@ struct StrRedOpt: PassInfoMixin<StrRedOpt> {
               }
               inst.replaceAllUsesWith(daInserire.back());
             } 
+
+            //se l'istruzione non viene piu' usata viene aggiunta al vettore di istruzioni da eliminare
+            deadCode.push_back(&inst);
+            
           }
         }
         
         
-      } 
+      }
+
+      
     }
+
+    //rimozione delle istruzioni non utilizzate
+    for (Instruction *inst : deadCode) {
+      inst->eraseFromParent();
+    }
+
     return PreservedAnalyses::all();
   }
   
